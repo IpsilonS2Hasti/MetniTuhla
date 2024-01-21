@@ -8,6 +8,7 @@ const int COLS = 8;
 char matrix[ROWS][COLS];
 const char* colorsArr = "   GORPB";
 const int colorsArrLength = 8;
+int score = 0;
 
 // ANSI color codes
 const char* RED = "\033[31m";
@@ -84,6 +85,7 @@ const char* getColor(char block) {
 }
 
 void printMatrix(){
+    cout << "Current score: " << score << endl;
     cout << "  ";
     for(int i=0; i < COLS; i++)
         cout << i << ' ';
@@ -131,7 +133,7 @@ void processPlayerInput(){
         int x, y, moveAmount;
         char direction;
         cin >> x >> y >> direction >> moveAmount;
-        x=ROWS-1-x;
+        x=ROWS-1-x; //account for the fact the game counts bottom to top
 
         if (!cin) {
             cout << "Invalid input" << endl;
@@ -140,7 +142,13 @@ void processPlayerInput(){
             continue;
         }
 
-        if(x < 0 || x > ROWS-1 || y < 0 || y > COLS-1 || moveAmount <= 0 || moveAmount >= COLS-1 || !(direction == 'r' || direction == 'l')){
+        if(x < 0 || x > ROWS-1 || y < 0 || y > COLS-1 || moveAmount <= 0 || moveAmount > COLS-1 || !(direction == 'r' || direction == 'l')){
+            cout<< "Invalid input" << endl;
+            continue;
+        }
+
+        //check if coordinates point to start of brick (capital letter)
+        if(!isUpper(matrix[x][y])){
             cout<< "Invalid input" << endl;
             continue;
         }
@@ -172,36 +180,105 @@ void processPlayerInput(){
             }
             if(!hasCollided) moveBrick(x, y, moveAmount);
         }
-        if(hasCollided) cout<< "Illegal move" << endl;
+        if(hasCollided) {
+            cout<< "Illegal move" << endl;
+            continue;
+        }
 
         inputInvalid = false;
     }
 }
 
+bool hasSpaceToFall(int x, int y, int length){
+    bool blockBelow = false;
+    for (int i = 0; i < length; i++) {
+        if(matrix[x+1][y+i] != ' ')  {
+            blockBelow = true;
+            break;
+        }
+    }
+    return !blockBelow;
+}
+
+void fallBrick(int x, int y, int length){
+    for (int i = 0; i < length; i++){
+        matrix[x+1][y+i] = matrix[x][y+i];
+        matrix[x][y+i] = ' ';
+    }
+}
+
+void updateAllBricks(){
+    bool changeHasOccurred = true;
+    while(changeHasOccurred){
+        changeHasOccurred = false;
+        for(int curRow=0; curRow < ROWS-1; curRow++){
+            for(int curCol=0; curCol < COLS; curCol++){
+                int brickLength = 0;
+                if(isUpper(matrix[curRow][curCol])){
+                    brickLength = getBrickLength(curRow, curCol);
+                    if(hasSpaceToFall(curRow, curCol, brickLength)){
+                        fallBrick(curRow, curCol, brickLength);
+                        changeHasOccurred = true;
+                    }
+                    brickLength--;
+                }
+                curCol+=brickLength;
+            }
+        }
+    }
+}
+
+bool clearFilledRows(){
+    bool hasPerformedOperation = false;
+    for(int i=0; i < ROWS; i++){
+        bool hasEmptySpace = false;
+        for(int j=0; j < COLS; j++){
+            if(matrix[i][j]==' ') {
+                hasEmptySpace = true;
+                break;
+            }
+        }
+        if(!hasEmptySpace) {
+            for(int j=0; j < COLS; j++) matrix[i][j] = ' ';
+            score += 10;
+            hasPerformedOperation = true;
+        }
+    }
+    return hasPerformedOperation;
+}
+
 int main() {
     cout << "Welcome to Metni Tuhla!" << endl;
     clearMatrix();
-    printMatrix();
-    int points = 0;
+
+    goto reRow; //Generate initial row
+
     while(true){
         cout << "Enter command: " << endl;
 
-        //Calculate player move and its consequences
+        //Handle player move and update bricks
         processPlayerInput();
+        updateAllBricks();
 
+        //Check for Filled rows and update if any
+        while(clearFilledRows()) updateAllBricks();
+
+        //Handle new row and update
         shiftMatrixUp();
-
-        //Game Over condition
-        if(!rowIsEmpty(0)) break;
+        if(!rowIsEmpty(0)) break; //Game Over condition
 
         reRow:
         fillRow(ROWS-1);
         if(rowIsFilled(ROWS-1)) {
-            points += 10;
+            score += 10;
             goto reRow;
         }
         if(rowIsEmpty(ROWS-1)) goto reRow;
 
+        updateAllBricks();
+        while(clearFilledRows()) updateAllBricks();
+
+        //Print on screen
         printMatrix();
     }
     return 0;
