@@ -1,5 +1,6 @@
 #include <iostream>
 #include <random>
+#include <fstream>
 
 using namespace std;
 
@@ -9,6 +10,13 @@ char matrix[ROWS][COLS];
 const char* colorsArr = "   GORPB";
 const int colorsArrLength = 8;
 int score = 0;
+const int MAX_UNAME_SIZE = 24;
+const int MAX_PASS_SIZE = 12;
+const int MAX_HSCORE_SIZE = 9;
+char username[MAX_UNAME_SIZE];
+char password[MAX_PASS_SIZE];
+int highscore;
+char* loginFilePath = "/Users/admin/CLionProjects/MetniTuhla/loginFile.txt";
 
 // ANSI color codes
 const char* RED = "\033[31m";
@@ -85,7 +93,7 @@ const char* getColor(char block) {
 }
 
 void printMatrix(){
-    cout << "Current score: " << score << endl;
+    cout << endl << "Current score: " << score << endl;
     cout << "  ";
     for(int i=0; i < COLS; i++)
         cout << i << ' ';
@@ -126,13 +134,37 @@ void moveBrick(int x, int y, int offset){
         matrix[x][y+offset+i] = tempBrick[i];
 }
 
+void saveHighscore(){
+    if(highscore == -1) return;
+    if(score<=highscore) return;
+
+    cout << endl << ORANGE << "CONGRATULATIONS! NEW HIGHSCORE: " << score << RESET;
+
+    ofstream loginFile(loginFilePath, ios::app);
+    if (!loginFile.is_open()){
+        cout << "File error";
+        return;
+    }
+
+    loginFile << username << endl;
+    loginFile << password << endl;
+    loginFile << score << endl;
+    loginFile.close();
+}
+
 void processPlayerInput(){
     bool inputInvalid = true;
 
     while(inputInvalid){
         int x, y, moveAmount;
-        char direction;
-        cin >> x >> y >> direction >> moveAmount;
+        char direction, numOrQuit;
+        cin >> numOrQuit;
+        if(numOrQuit == 'q') {
+            saveHighscore();
+            exit(0);
+        }
+        else x = numOrQuit - '0';
+        cin >> y >> direction >> moveAmount;
         x=ROWS-1-x; //account for the fact the game counts bottom to top
 
         if (!cin) {
@@ -247,12 +279,104 @@ bool clearFilledRows(){
     return hasPerformedOperation;
 }
 
+bool loginMenu(){
+        cout << endl<< "Enter login details:" << endl;
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        cout << "Username: ";
+        cin.getline(username, MAX_UNAME_SIZE);
+        cout << "Password: ";
+        cin.getline(password, MAX_PASS_SIZE);
+
+        //read from file
+        ifstream loginFile(loginFilePath);
+        if (!loginFile.is_open()){
+            cout << "File error";
+            return false;
+        }
+
+        char fileUName[MAX_UNAME_SIZE];
+        char filePass[MAX_PASS_SIZE];
+        int fileHighscore;
+        bool userFound = false;
+        while(!loginFile.eof()){
+            loginFile.getline(fileUName, MAX_UNAME_SIZE);
+            loginFile.getline(filePass, MAX_PASS_SIZE);
+            loginFile >> fileHighscore;
+            loginFile.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+
+            if((strcmp(fileUName, username)==0) && (strcmp(filePass, password)==0)){
+                userFound = true;
+                if(fileHighscore > highscore) highscore = fileHighscore;
+            }
+        }
+        if(userFound) return true;
+        cout << "Incorrect details" << "\n\n";
+        return false;
+}
+
+bool createAccMenu(){
+    cout << endl<< "Create account:" << endl;
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+    cout << "Username: ";
+    cin.getline(username, MAX_UNAME_SIZE);
+    cout << "Password: ";
+    cin.getline(password, MAX_PASS_SIZE);
+
+    ofstream loginFile(loginFilePath, ios::app);
+    if (!loginFile.is_open()){
+        cout << "File error";
+        return false;
+    }
+
+    loginFile << username << endl;
+    loginFile << password << endl;
+    loginFile << 0 << endl;
+    loginFile.close();
+    highscore = 0;
+    return true;
+}
+
+void mainMenu() {
+    while(true){
+        int option = 0;
+        cout<< "Main menu:" << endl;
+        cout<< "1) Play anonymous (Highscore will be lost!)" << endl << "2) Log in" << endl << "3) Create account" << endl << "4) Quit" << endl;
+        cin >> option;
+        if (!cin || option < 1 || option > 4) {
+            cout << "Invalid input" << endl;
+            cin.clear();
+            cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            continue;
+        }
+
+        switch(option){
+            case 1:
+            {
+               highscore = -1;
+               return;
+            }
+            case 2:
+                if(loginMenu()) return;
+                break;
+            case 3:
+                if(createAccMenu()) return;
+                break;
+            case 4:
+                exit(0);
+        }
+
+    }
+}
+
 int main() {
     cout << "Welcome to Metni Tuhla!" << endl;
     clearMatrix();
 
-    goto reRow; //Generate initial row
+    mainMenu();
 
+    if(highscore>0) cout << endl << ORANGE << "YOUR HIGHSCORE IS: " << highscore << RESET;
+
+    goto reRow; //Generate initial row;
     while(true){
         cout << "Enter command: " << endl;
 
@@ -265,7 +389,11 @@ int main() {
 
         //Handle new row and update
         shiftMatrixUp();
-        if(!rowIsEmpty(0)) break; //Game Over condition
+        if(!rowIsEmpty(0)) {
+            cout << endl << RED << "GAME OVER!" << RESET;
+            saveHighscore();
+            break;
+        }
 
         reRow:
         fillRow(ROWS-1);
