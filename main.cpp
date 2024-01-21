@@ -63,6 +63,15 @@ bool rowIsEmpty(int row){
     return true;
 }
 
+void shiftMatrixUp(){
+    for(int i=0; i<ROWS-1; i++){
+        for(int j=0; j<COLS; j++)
+            matrix[i][j] = matrix[i+1][j];
+    }
+    for(int i=0; i<COLS; i++)
+        matrix[ROWS-1][i] = ' ';
+}
+
 const char* getColor(char block) {
     switch(toLower(block)) {
         case 'g': return GREEN;
@@ -75,8 +84,12 @@ const char* getColor(char block) {
 }
 
 void printMatrix(){
+    cout << "  ";
+    for(int i=0; i < COLS; i++)
+        cout << i << ' ';
+    cout << endl;
     for(int i = 0; i < ROWS; i++){
-        cout << '|';
+        cout << ROWS-1-i << '|';
         for(int j = 0; j < COLS; j++){
             if(isupper(matrix[i][j])) {
                 cout << getColor(matrix[i][j]) << "{]" << RESET; // Start of the brick
@@ -86,7 +99,82 @@ void printMatrix(){
                 cout << "  ";
             }
         }
-        cout << '|' << endl;
+        cout << '|'  << ROWS-1-i << endl;
+    }
+    cout << "  ";
+    for(int i=0; i < COLS; i++)
+        cout << i << ' ';
+    cout << endl;
+}
+
+int getBrickLength(int x, int y){
+    int i=y+1;
+    while(i < COLS && !isUpper(matrix[x][i]) && matrix[x][i] != ' ') i++;
+    return i-y;
+}
+
+void moveBrick(int x, int y, int offset){
+    int length = getBrickLength(x, y);
+    char tempBrick[5] = {' ', ' ', ' ', ' '};
+    for(int i=0; i<=length-1; i++){
+        tempBrick[i] = matrix[x][y+i];
+        matrix[x][y+i] = ' ';
+    }
+    for(int i=0; i<=length-1; i++)
+        matrix[x][y+offset+i] = tempBrick[i];
+}
+
+void processPlayerInput(){
+    bool inputInvalid = true;
+
+    while(inputInvalid){
+        int x, y, moveAmount;
+        char direction;
+        cin >> x >> y >> direction >> moveAmount;
+        x=ROWS-1-x;
+
+        if (!cin) {
+            cout << "Invalid input" << endl;
+            cin.clear();
+            cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            continue;
+        }
+
+        if(x < 0 || x > ROWS-1 || y < 0 || y > COLS-1 || moveAmount <= 0 || moveAmount >= COLS-1 || !(direction == 'r' || direction == 'l')){
+            cout<< "Invalid input" << endl;
+            continue;
+        }
+
+        //check for collisions
+        bool hasCollided = false;
+        if(direction == 'l'){
+            if(y-moveAmount < 0) hasCollided = true;
+            else{
+                for(int i=1; i<=moveAmount; i++){
+                    if(matrix[x][y-i] != ' '){
+                        hasCollided = true;
+                        break;
+                    }
+                }
+            }
+            if(!hasCollided) moveBrick(x, y, -moveAmount);
+
+        }else{
+            if(y+moveAmount > COLS-1) hasCollided = true;
+            else{
+                for(int i=1; i<=moveAmount; i++){
+                    if(matrix[x][y+getBrickLength(x, y)-1+i] != ' '){
+                        hasCollided = true;
+                        break;
+                    }
+
+                }
+            }
+            if(!hasCollided) moveBrick(x, y, moveAmount);
+        }
+        if(hasCollided) cout<< "Illegal move" << endl;
+
+        inputInvalid = false;
     }
 }
 
@@ -94,14 +182,26 @@ int main() {
     cout << "Welcome to Metni Tuhla!" << endl;
     clearMatrix();
     printMatrix();
+    int points = 0;
     while(true){
         cout << "Enter command: " << endl;
-        char a;
-        cin >> a;
-        if(a == 'q') break;
-        rowCheck:
+
+        //Calculate player move and its consequences
+        processPlayerInput();
+
+        shiftMatrixUp();
+
+        //Game Over condition
+        if(!rowIsEmpty(0)) break;
+
+        reRow:
         fillRow(ROWS-1);
-        if(rowIsFilled(ROWS-1)) goto rowCheck;
+        if(rowIsFilled(ROWS-1)) {
+            points += 10;
+            goto reRow;
+        }
+        if(rowIsEmpty(ROWS-1)) goto reRow;
+
         printMatrix();
     }
     return 0;
